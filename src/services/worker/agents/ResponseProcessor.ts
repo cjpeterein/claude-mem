@@ -16,6 +16,8 @@ import { parseObservations, parseSummary, type ParsedObservation, type ParsedSum
 import { updateCursorContextForProject } from '../../integrations/CursorHooksInstaller.js';
 import { updateFolderClaudeMdFiles } from '../../../utils/claude-md-utils.js';
 import { getWorkerPort } from '../../../shared/worker-utils.js';
+import { SettingsDefaultsManager } from '../../../shared/SettingsDefaultsManager.js';
+import { USER_SETTINGS_PATH } from '../../../shared/paths.js';
 import type { ActiveSession } from '../../worker-types.js';
 import type { DatabaseManager } from '../DatabaseManager.js';
 import type { SessionManager } from '../SessionManager.js';
@@ -214,22 +216,25 @@ async function syncAndBroadcastObservations(
   }
 
   // Update folder CLAUDE.md files for touched folders (fire-and-forget)
-  // This runs per-observation batch to ensure folders are updated as work happens
-  const allFilePaths: string[] = [];
-  for (const obs of observations) {
-    allFilePaths.push(...(obs.files_modified || []));
-    allFilePaths.push(...(obs.files_read || []));
-  }
+  // This is opt-in via CLAUDE_MEM_AUTO_UPDATE_FOLDER_MD setting
+  const settings = SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH);
+  if (settings.CLAUDE_MEM_AUTO_UPDATE_FOLDER_MD === 'true') {
+    const allFilePaths: string[] = [];
+    for (const obs of observations) {
+      allFilePaths.push(...(obs.files_modified || []));
+      allFilePaths.push(...(obs.files_read || []));
+    }
 
-  if (allFilePaths.length > 0) {
-    updateFolderClaudeMdFiles(
-      allFilePaths,
-      session.project,
-      getWorkerPort(),
-      projectRoot
-    ).catch(error => {
-      logger.warn('FOLDER_INDEX', 'CLAUDE.md update failed (non-critical)', { project: session.project }, error as Error);
-    });
+    if (allFilePaths.length > 0) {
+      updateFolderClaudeMdFiles(
+        allFilePaths,
+        session.project,
+        getWorkerPort(),
+        projectRoot
+      ).catch(error => {
+        logger.warn('FOLDER_INDEX', 'CLAUDE.md update failed (non-critical)', { project: session.project }, error as Error);
+      });
+    }
   }
 }
 

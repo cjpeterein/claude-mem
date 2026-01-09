@@ -4,12 +4,19 @@ import {
   waitForHealth,
   waitForPortFree
 } from '../../src/services/infrastructure/index.js';
+import { clearPortCache, getWorkerHost } from '../../src/shared/worker-utils.js';
 
 describe('HealthMonitor', () => {
   const originalFetch = global.fetch;
 
+  beforeEach(() => {
+    // Clear the cached host/port to ensure tests use fresh values
+    clearPortCache();
+  });
+
   afterEach(() => {
     global.fetch = originalFetch;
+    clearPortCache();
   });
 
   describe('isPortInUse', () => {
@@ -17,9 +24,10 @@ describe('HealthMonitor', () => {
       global.fetch = mock(() => Promise.resolve({ ok: true } as Response));
 
       const result = await isPortInUse(37777);
+      const host = getWorkerHost();
 
       expect(result).toBe(true);
-      expect(global.fetch).toHaveBeenCalledWith('http://127.0.0.1:37777/api/health');
+      expect(global.fetch).toHaveBeenCalledWith(`http://${host}:37777/api/health`);
     });
 
     it('should return false for free port (connection refused)', async () => {
@@ -103,11 +111,12 @@ describe('HealthMonitor', () => {
       global.fetch = fetchMock;
 
       await waitForHealth(37777, 1000);
+      const host = getWorkerHost();
 
       // waitForHealth uses /api/readiness, not /api/health
       const calls = fetchMock.mock.calls;
       expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toBe('http://127.0.0.1:37777/api/readiness');
+      expect(calls[0][0]).toBe(`http://${host}:37777/api/readiness`);
     });
 
     it('should use default timeout when not specified', async () => {
